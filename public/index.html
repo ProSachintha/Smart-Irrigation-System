@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Irrigation System</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+</head>
+<body class="bg-gray-100 font-sans">
+    <div class="container mx-auto py-10">
+        <h1 class="text-4xl text-center font-bold mb-6">Design Project - Group 09</h1>
+        <h1 class="text-4xl text-center font-bold mb-6">Smart Irrigation System</h1>
+        
+        <!-- Current Sensor Data -->
+        <div class="grid grid-cols-2 gap-6 mb-10">
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold">Temperature</h2>
+                <p id="temperature" class="text-3xl text-blue-600">-- °C</p>
+            </div>
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold">Humidity</h2>
+                <p id="humidity" class="text-3xl text-green-600">-- %</p>
+            </div>
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold">Soil Moisture</h2>
+                <p id="soilMoisture" class="text-3xl text-yellow-600">--</p>
+            </div>
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold">Water Pump Status</h2>
+                <p id="waterPumpStatus" class="text-3xl text-red-600">--</p>
+            </div>
+        </div>
+
+        <!-- Sensor History Charts -->
+        <div class="grid grid-cols-2 gap-6">
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold mb-4">Temperature History</h2>
+                <canvas id="temperatureChart"></canvas>
+            </div>
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold mb-4">Humidity History</h2>
+                <canvas id="humidityChart"></canvas>
+            </div>
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold mb-4">Soil Moisture History</h2>
+                <canvas id="soilMoistureChart"></canvas>
+            </div>
+            <div class="bg-white shadow-lg p-6 rounded">
+                <h2 class="text-xl font-semibold mb-4">Water Pump Status History</h2>
+                <canvas id="waterPumpChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        const MAX_DATA_POINTS = 20; // Maximum number of data points to display
+
+        // Chart configurations for different sensors
+        const chartConfigs = {
+            temperature: {
+                label: 'Temperature (°C)',
+                borderColor: 'blue',
+                yAxisLabel: 'Temperature (°C)'
+            },
+            humidity: {
+                label: 'Humidity (%)',
+                borderColor: 'green',
+                yAxisLabel: 'Humidity (%)'
+            },
+            soilMoisture: {
+                label: 'Soil Moisture',
+                borderColor: 'orange',
+                yAxisLabel: 'Soil Moisture'
+            },
+            waterPump: {
+                label: 'Water Pump Status (ON = 1, OFF = 0)',
+                borderColor: 'red',
+                yAxisLabel: 'Pump Status'
+            }
+        };
+
+        // Initialize charts
+        const charts = {};
+        Object.keys(chartConfigs).forEach(key => {
+            const ctx = document.getElementById(`${key}Chart`);
+            charts[key] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: chartConfigs[key].label,
+                        data: [],
+                        borderColor: chartConfigs[key].borderColor,
+                        fill: false,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: chartConfigs[key].yAxisLabel
+                            },
+                            ...(key === 'waterPump' ? { 
+                                beginAtZero: true, 
+                                max: 1 
+                            } : {})
+                        }
+                    },
+                    animation: {
+                        duration: 0 // Disable animations for smoother updates
+                    }
+                }
+            });
+        });
+
+        // Update chart with new data point
+        function updateChart(chartName, value) {
+            const chart = charts[chartName];
+            const currentTime = new Date().toLocaleTimeString();
+
+            // Add new data point
+            chart.data.labels.push(currentTime);
+            chart.data.datasets[0].data.push(value);
+
+            // Limit number of data points
+            if (chart.data.labels.length > MAX_DATA_POINTS) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+
+            chart.update('none'); // Update without animation
+        }
+
+        // Handle sensor updates via Socket.IO
+        socket.on('sensor-update', (data) => {
+            // Update current sensor values
+            document.getElementById('temperature').textContent = `${data.temperature} °C`;
+            document.getElementById('humidity').textContent = `${data.humidity} %`;
+            document.getElementById('soilMoisture').textContent = data.soilMoisture;
+            document.getElementById('waterPumpStatus').textContent = data.waterPumpStatus;
+
+            // Update charts
+            updateChart('temperature', data.temperature);
+            updateChart('humidity', data.humidity);
+            updateChart('soilMoisture', data.soilMoisture);
+            updateChart('waterPump', data.waterPumpStatus === 'ON' ? 1 : 0);
+        });
+    </script>
+</body>
+</html>
